@@ -1,73 +1,229 @@
-// screens/GoalsScreen.tsx
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
-    StyleSheet,
     TextInput,
-    FlatList,
     TouchableOpacity,
     Alert,
     Animated,
     useColorScheme,
     Keyboard,
-    Pressable
+    Pressable,
+    ScrollView,
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MotivoButton } from '../components/MotivoButton';
-import { Goal } from '../types';
-import { getTheme, spacing, roundness, typography, elevation } from '@theme/theme';
 import { Swipeable } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 
 const STORAGE_KEY = '@weekly_goals';
 const MAX_GOALS = 3;
+
+type Goal = {
+    id: string;
+    text: string;
+    completed: boolean;
+    createdAt: number;
+};
 
 const GoalsScreen: React.FC = () => {
     const [goals, setGoals] = useState<Goal[]>([]);
     const [input, setInput] = useState('');
     const [isAdding, setIsAdding] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const colorScheme = useColorScheme();
-    const theme = getTheme(colorScheme, 'minimal'); // Set default theme to minimal
+    const isDark = colorScheme === 'dark';
 
-    // Animation values - more subtle for minimalism
-    const fadeAnim = React.useRef(new Animated.Value(0)).current;
-    const scaleAnim = React.useRef(new Animated.Value(0.98)).current; // Less scale difference
+    const styles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: isDark ? '#111827' : '#F9FAFB',
+        },
+        contentContainer: {
+            padding: 20,
+            paddingBottom: 40,
+        },
+        header: {
+            marginBottom: 24,
+        },
+        title: {
+            fontSize: 24,
+            fontWeight: '700',
+            marginBottom: 6,
+            color: isDark ? '#F9FAFB' : '#1F2937',
+        },
+        subtitle: {
+            fontSize: 14,
+            color: isDark ? '#9CA3AF' : '#6B7280',
+        },
+        card: {
+            borderRadius: 16,
+            overflow: 'hidden',
+            marginBottom: 24,
+            borderWidth: 1,
+            borderColor: isDark ? '#374151' : '#E5E7EB',
+            backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+            shadowColor: isDark ? '#000000' : '#1F2937',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: isDark ? 0.25 : 0.05,
+            shadowRadius: isDark ? 8 : 4,
+            elevation: 2,
+        },
+        emptyContainer: {
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 24,
+        },
+        emptyText: {
+            fontSize: 16,
+            color: isDark ? '#9CA3AF' : '#6B7280',
+            textAlign: 'center',
+        },
+        goalItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: isDark ? '#374151' : '#F3F4F6',
+            backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+        },
+        checkbox: {
+            width: 20,
+            height: 20,
+            borderRadius: 6,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 12,
+        },
+        checkedBox: {
+            backgroundColor: '#6366F1',
+            borderColor: '#6366F1',
+            borderWidth: 1,
+        },
+        uncheckedBox: {
+            borderWidth: 1,
+            borderColor: isDark ? '#6B7280' : '#9CA3AF',
+        },
+        checkmark: {
+            color: '#FFFFFF',
+            fontSize: 12,
+            fontWeight: 'bold',
+        },
+        goalText: {
+            flex: 1,
+            fontSize: 16,
+        },
+        completedText: {
+            color: isDark ? '#6B7280' : '#9CA3AF',
+            textDecorationLine: 'line-through',
+        },
+        activeText: {
+            color: isDark ? '#F9FAFB' : '#1F2937',
+        },
+        inputContainer: {
+            marginBottom: 24,
+        },
+        input: {
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 16,
+            borderWidth: 1,
+            fontSize: 16,
+            borderColor: isDark ? '#374151' : '#E5E7EB',
+            backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+            color: isDark ? '#F9FAFB' : '#1F2937',
+        },
+        buttonRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+        },
+        buttonSpacer: {
+            width: 12,
+        },
+        deleteAction: {
+            justifyContent: 'center',
+            alignItems: 'flex-end',
+            marginVertical: 1,
+            paddingHorizontal: 20,
+            width: 96,
+            backgroundColor: '#EF4444',
+        },
+        deleteText: {
+            color: '#FFFFFF',
+            fontSize: 14,
+            fontWeight: '500',
+        },
+        progressContainer: {
+            marginBottom: 24,
+        },
+        progressText: {
+            fontSize: 14,
+            textAlign: 'center',
+            marginBottom: 12,
+            color: isDark ? '#9CA3AF' : '#6B7280',
+        },
+        progressBar: {
+            height: 6,
+            borderRadius: 100,
+            overflow: 'hidden',
+            backgroundColor: isDark ? '#374151' : '#F3F4F6',
+        },
+        progressFill: {
+            height: '100%',
+            borderRadius: 100,
+            backgroundColor: isDark ? '#6366F1' : '#4F46E5',
+        },
+    });
 
-    useEffect(() => {
-        loadGoals();
-
-        // Minimal fade in animation
-        Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 700, // Slower, more subtle animation
-                useNativeDriver: true
-            }),
-            Animated.timing(scaleAnim, { // Simpler animation for minimalism
-                toValue: 1,
-                duration: 700,
-                useNativeDriver: true
-            })
-        ]).start();
-    }, []);
-
-    async function loadGoals() {
+    const loadGoals = useCallback(async () => {
+        setIsLoading(true);
         try {
             const stored = await AsyncStorage.getItem(STORAGE_KEY);
-            setGoals(stored ? JSON.parse(stored) : []);
-        } catch {
+            const parsedGoals = stored ? JSON.parse(stored) : [];
+
+            // Sort goals by completion status and creation date
+            const sortedGoals = [...parsedGoals].sort((a, b) => {
+                if (a.completed === b.completed) {
+                    return (b.createdAt || 0) - (a.createdAt || 0);
+                }
+                return a.completed ? 1 : -1;
+            });
+
+            setGoals(sortedGoals);
+        } catch (error) {
+            console.error('Failed to load goals:', error);
+            Alert.alert('Error', 'Failed to load your goals. Please try again.');
             setGoals([]);
+        } finally {
+            setIsLoading(false);
         }
-    }
+    }, []);
 
-    async function saveGoals(newGoals: Goal[]) {
-        setGoals(newGoals);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newGoals));
-    }
+    const saveGoals = useCallback(async (newGoals: Goal[]) => {
+        try {
+            const sortedGoals = [...newGoals].sort((a, b) => {
+                if (a.completed === b.completed) {
+                    return (b.createdAt || 0) - (a.createdAt || 0);
+                }
+                return a.completed ? 1 : -1;
+            });
 
-    function handleAddGoal() {
+            setGoals(sortedGoals);
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sortedGoals));
+        } catch (error) {
+            console.error('Failed to save goals:', error);
+            Alert.alert('Error', 'Failed to save your changes. Please try again.');
+        }
+    }, []);
+
+    const handleAddGoal = useCallback(() => {
         if (!input.trim()) return;
+
         if (goals.length >= MAX_GOALS) {
             Alert.alert('Limit reached', `You can only set up to ${MAX_GOALS} goals.`);
             return;
@@ -77,302 +233,195 @@ const GoalsScreen: React.FC = () => {
             id: Date.now().toString(),
             text: input.trim(),
             completed: false,
+            createdAt: Date.now(),
         };
-
-        // Simpler animation for minimalism
-        Animated.timing(scaleAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true
-        }).start();
 
         saveGoals([...goals, newGoal]);
         setInput('');
         setIsAdding(false);
         Keyboard.dismiss();
-    }
+    }, [goals, input, saveGoals]);
 
-    function handleToggleGoal(id: string) {
+    const handleToggleGoal = useCallback((id: string) => {
         const updated = goals.map(goal =>
             goal.id === id ? { ...goal, completed: !goal.completed } : goal
         );
         saveGoals(updated);
-    }
+    }, [goals, saveGoals]);
 
-    function handleDeleteGoal(id: string) {
-        const updated = goals.filter(goal => goal.id !== id);
-        saveGoals(updated);
-    }
-
-    const renderRightActions = (id: string) => {
-        return (
-            <TouchableOpacity
-                style={[
-                    styles.deleteAction,
-                    { backgroundColor: theme.error }
-                ]}
-                onPress={() => handleDeleteGoal(id)}
-            >
-                <Text style={styles.deleteActionText}>Delete</Text>
-            </TouchableOpacity>
+    const handleDeleteGoal = useCallback((id: string) => {
+        Alert.alert(
+            'Delete Goal',
+            'Are you sure you want to delete this goal?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                        const updated = goals.filter(goal => goal.id !== id);
+                        saveGoals(updated);
+                    }
+                },
+            ]
         );
-    };
+    }, [goals, saveGoals]);
+
+    const renderRightActions = useCallback((id: string) => (
+        <TouchableOpacity
+            style={styles.deleteAction}
+            onPress={() => handleDeleteGoal(id)}
+        >
+            <Text style={styles.deleteText}>Delete</Text>
+        </TouchableOpacity>
+    ), [handleDeleteGoal, styles.deleteAction, styles.deleteText]);
+
+    useEffect(() => {
+        loadGoals();
+    }, [loadGoals]);
+
+    // Progress bar calculation
+    const completed = goals.filter(g => g.completed).length;
+    const progress = goals.length > 0 ? completed / goals.length : 0;
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
-            <Animated.View
-                style={[
-                    styles.headerSection,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{ scale: scaleAnim }]
-                    }
-                ]}
+        <SafeAreaView style={styles.container}>
+            <StatusBar style={isDark ? 'light' : 'dark'} />
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
             >
-                <Text style={[styles.title, { color: theme.text }]}>Weekly Goals</Text>
-                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                    Focus on {MAX_GOALS} important goals this week
-                </Text>
-            </Animated.View>
-
-            <View style={[
-                styles.goalsContainer,
-                {
-                    backgroundColor: theme.card,
-                    borderColor: theme.divider
-                },
-                elevation.small
-            ]}>
-                {goals.length === 0 ? (
-                    <Animated.View
-                        style={[
-                            styles.emptyContainer,
-                            { opacity: fadeAnim }
-                        ]}
-                    >
-                        <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                            No goals yet
+                <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={styles.contentContainer}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <Text style={styles.title}>Weekly Goals</Text>
+                        <Text style={styles.subtitle}>
+                            Focus on {MAX_GOALS} important goals this week
                         </Text>
-                    </Animated.View>
-                ) : (
-                    <FlatList
-                        data={goals}
-                        keyExtractor={item => item.id}
-                        renderItem={({ item, index }) => (
-                            <Swipeable renderRightActions={() => renderRightActions(item.id)}>
+                    </View>
+
+                    {/* Goals List */}
+                    <View style={styles.card}>
+                        {isLoading ? (
+                            <View style={styles.emptyContainer}>
+                                <Text style={styles.emptyText}>Loading goals...</Text>
+                            </View>
+                        ) : goals.length === 0 ? (
+                            <View style={styles.emptyContainer}>
+                                <Text style={styles.emptyText}>
+                                    No goals yet. Add your first goal below!
+                                </Text>
+                            </View>
+                        ) : (
+                            goals.map((item, index) => (
+                                <Swipeable key={item.id} renderRightActions={() => renderRightActions(item.id)}>
+                                    <View
+                                        style={[
+                                            styles.goalItem,
+                                            // Remove bottom border for last item
+                                            index === goals.length - 1 && { borderBottomWidth: 0 }
+                                        ]}
+                                    >
+                                        <Pressable
+                                            style={[
+                                                styles.checkbox,
+                                                item.completed ? styles.checkedBox : styles.uncheckedBox
+                                            ]}
+                                            onPress={() => handleToggleGoal(item.id)}
+                                            android_ripple={{
+                                                color: 'rgba(99, 102, 241, 0.2)',
+                                                radius: 22,
+                                                borderless: true
+                                            }}
+                                        >
+                                            {item.completed && (
+                                                <Text style={styles.checkmark}>✓</Text>
+                                            )}
+                                        </Pressable>
+                                        <Text
+                                            style={[
+                                                styles.goalText,
+                                                item.completed ? styles.completedText : styles.activeText
+                                            ]}
+                                            numberOfLines={2}
+                                        >
+                                            {item.text}
+                                        </Text>
+                                    </View>
+                                </Swipeable>
+                            ))
+                        )}
+                    </View>
+
+                    {/* Add Goal Input or Button */}
+                    {isAdding ? (
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                value={input}
+                                onChangeText={setInput}
+                                placeholder="What do you want to accomplish?"
+                                placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
+                                autoFocus
+                                maxLength={100}
+                                returnKeyType="done"
+                                onSubmitEditing={handleAddGoal}
+                            />
+                            <View style={styles.buttonRow}>
+                                <MotivoButton
+                                    title="Cancel"
+                                    onPress={() => {
+                                        setInput('');
+                                        setIsAdding(false);
+                                    }}
+                                    variant="outline"
+                                    style={{ flex: 1 }}
+                                />
+                                <View style={styles.buttonSpacer} />
+                                <MotivoButton
+                                    title="Add Goal"
+                                    onPress={handleAddGoal}
+                                    style={{ flex: 1 }}
+                                    disabled={!input.trim()}
+                                />
+                            </View>
+                        </View>
+                    ) : (
+                        <MotivoButton
+                            title={`${goals.length >= MAX_GOALS ? 'Goal limit reached' : 'Add goal'}`}
+                            onPress={() => setIsAdding(true)}
+                            fullWidth
+                            style={{ marginBottom: 24 }}
+                            variant={goals.length >= MAX_GOALS ? "outline" : "primary"}
+                            disabled={goals.length >= MAX_GOALS}
+                        />
+                    )}
+
+                    {/* Progress Bar */}
+                    {goals.length > 0 && (
+                        <View style={styles.progressContainer}>
+                            <Text style={styles.progressText}>
+                                {completed} of {goals.length} completed
+                            </Text>
+                            <View style={styles.progressBar}>
                                 <Animated.View
                                     style={[
-                                        styles.goalRow,
-                                        {
-                                            backgroundColor: theme.backgroundAlt,
-                                            borderBottomColor: theme.divider,
-                                            opacity: fadeAnim,
-                                        }
+                                        styles.progressFill,
+                                        { width: `${progress * 100}%` }
                                     ]}
-                                >
-                                    <Pressable
-                                        style={[
-                                            styles.checkbox,
-                                            { borderColor: theme.textSecondary },
-                                            item.completed && { backgroundColor: theme.accent, borderColor: theme.accent }
-                                        ]}
-                                        onPress={() => handleToggleGoal(item.id)}
-                                        android_ripple={{ color: theme.accentLight, radius: 20 }}
-                                    >
-                                        {item.completed && (
-                                            <Text style={styles.checkmark}>✓</Text>
-                                        )}
-                                    </Pressable>
-                                    <Text
-                                        style={[
-                                            styles.goalText,
-                                            { color: theme.text },
-                                            item.completed && {
-                                                textDecorationLine: 'line-through',
-                                                color: theme.textSecondary
-                                            }
-                                        ]}
-                                    >
-                                        {item.text}
-                                    </Text>
-                                </Animated.View>
-                            </Swipeable>
-                        )}
-                        style={{ width: '100%' }}
-                        contentContainerStyle={{ paddingVertical: spacing.xs }}
-                    />
-                )}
-            </View>
-
-            {isAdding ? (
-                <View style={styles.inputContainer}>
-                    <TextInput
-                        style={[
-                            styles.input,
-                            {
-                                backgroundColor: theme.card,
-                                color: theme.text,
-                                borderColor: theme.divider
-                            }
-                        ]}
-                        value={input}
-                        onChangeText={setInput}
-                        placeholder="What do you want to accomplish?"
-                        placeholderTextColor={theme.textSecondary}
-                        autoFocus
-                        maxLength={50}
-                    />
-                    <View style={styles.inputButtons}>
-                        <MotivoButton
-                            title="Cancel"
-                            onPress={() => {
-                                setInput('');
-                                setIsAdding(false);
-                            }}
-                            variant="outline"
-                            style={{ flex: 1, marginRight: spacing.md }}
-                        />
-                        <MotivoButton
-                            title="Add"
-                            onPress={handleAddGoal}
-                            style={{ flex: 1 }}
-                            disabled={!input.trim()}
-                        />
-                    </View>
-                </View>
-            ) : (
-                <MotivoButton
-                    title={`${goals.length >= MAX_GOALS ? 'Goal limit reached' : 'Add goal'}`}
-                    onPress={() => setIsAdding(true)}
-                    fullWidth
-                    style={styles.addButton}
-                    variant={goals.length >= MAX_GOALS ? "outline" : "primary"}
-                    disabled={goals.length >= MAX_GOALS}
-                />
-            )}
-
-            <View style={styles.progressContainer}>
-                <Text style={[styles.progressText, { color: theme.textSecondary }]}>
-                    {goals.filter(g => g.completed).length} of {goals.length} completed
-                </Text>
-                <View style={[styles.progressBar, { backgroundColor: theme.backgroundAlt }]}>
-                    <Animated.View
-                        style={[
-                            styles.progressFill,
-                            {
-                                backgroundColor: theme.accent,
-                                width: `${goals.length > 0 ? (goals.filter(g => g.completed).length / goals.length) * 100 : 0}%`
-                            }
-                        ]}
-                    />
-                </View>
-            </View>
-        </View>
+                                />
+                            </View>
+                        </View>
+                    )}
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        padding: spacing.xl, // More generous padding
-    },
-    headerSection: {
-        marginBottom: spacing.xl, // More space below header
-    },
-    title: {
-        ...typography.title,
-        marginBottom: spacing.sm,
-    },
-    subtitle: {
-        ...typography.bodySmall,
-    },
-    goalsContainer: {
-        borderRadius: roundness.md, // More subtle rounding
-        overflow: 'hidden',
-        marginBottom: spacing.xl, // More space below container
-        flex: 1,
-        borderWidth: 1, // Subtle border
-    },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: spacing.xl,
-    },
-    emptyText: {
-        ...typography.body,
-        textAlign: 'center',
-    },
-    goalRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: spacing.lg, // More space in rows
-        borderBottomWidth: 1,
-    },
-    checkbox: {
-        width: 20, // Slightly smaller checkbox
-        height: 20, // Slightly smaller checkbox
-        borderRadius: roundness.sm,
-        borderWidth: 1, // Thinner border
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: spacing.md,
-    },
-    checkmark: {
-        color: '#FFFFFF',
-        fontSize: 14, // Slightly smaller checkmark
-        fontWeight: 'bold',
-    },
-    goalText: {
-        ...typography.body,
-        flex: 1,
-    },
-    inputContainer: {
-        marginBottom: spacing.xl, // More space below input
-    },
-    input: {
-        borderRadius: roundness.sm, // More subtle rounding
-        padding: spacing.md,
-        marginBottom: spacing.md, // More space below input
-        borderWidth: 1,
-        ...typography.body,
-    },
-    inputButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    addButton: {
-        marginBottom: spacing.xl, // More space below button
-    },
-    progressContainer: {
-        marginBottom: spacing.xl,
-    },
-    progressText: {
-        ...typography.bodySmall,
-        textAlign: 'center',
-        marginBottom: spacing.md, // More space below text
-    },
-    progressBar: {
-        height: 4, // Thinner progress bar for minimalism
-        borderRadius: roundness.full,
-        overflow: 'hidden',
-    },
-    progressFill: {
-        height: '100%',
-        borderRadius: roundness.full,
-    },
-    deleteAction: {
-        justifyContent: 'center',
-        alignItems: 'flex-end',
-        marginVertical: 1,
-        padding: spacing.md,
-        width: 100,
-    },
-    deleteActionText: {
-        color: 'white',
-        ...typography.bodySmall,
-        fontWeight: '500', // Less bold for minimalism
-    }
-});
 
 export default GoalsScreen;
