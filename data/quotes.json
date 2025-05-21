@@ -1,0 +1,22 @@
+[
+    {
+        "id": "1",
+        "text": "The only way to do great work is to love what you do.",
+        "author": "Steve Jobs"
+    },
+    {
+        "id": "2",
+        "text": "Success is not the key to happiness. Happiness is the key to success.",
+        "author": "Albert Schweitzer"
+    },
+    {
+        "id": "3",
+        "text": "Believe you can and you're halfway there.",
+        "author": "Theodore Roosevelt"
+    },
+    {
+        "id": "4",
+        "text": "You are never too old to set another goal or to dream a new dream.",
+        "author": "C.S. Lewis"
+    }
+]
