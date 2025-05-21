@@ -7,11 +7,11 @@ import {
     TextStyle,
     ColorValue,
     View,
-    ActivityIndicator
+    ActivityIndicator,
+    Animated
 } from 'react-native';
 import { useColorScheme } from 'react-native';
-import { getTheme, spacing, roundness, typography, elevation } from '../theme/theme';
-
+import { getTheme, spacing, roundness, typography, elevation } from '@theme/theme';
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost';
 type ButtonSize = 'small' | 'medium' | 'large';
 
@@ -27,6 +27,7 @@ type MotivoButtonProps = {
     loading?: boolean;
     icon?: React.ReactNode;
     fullWidth?: boolean;
+    iconPosition?: 'left' | 'right';
 };
 
 export const MotivoButton: React.FC<MotivoButtonProps> = ({
@@ -41,9 +42,12 @@ export const MotivoButton: React.FC<MotivoButtonProps> = ({
     loading = false,
     icon,
     fullWidth = false,
+    iconPosition = 'left',
 }) => {
     const scheme = useColorScheme();
     const theme = getTheme(scheme);
+    // Animation value for press feedback
+    const [scaleAnim] = React.useState(new Animated.Value(1));
 
     // Modern style handling based on variants
     const getButtonStyle = (): ViewStyle => {
@@ -78,12 +82,14 @@ export const MotivoButton: React.FC<MotivoButtonProps> = ({
     const getTextColor = (): ColorValue => {
         switch (variant) {
             case 'primary':
-                return theme.background;
+                return '#22223B'; // dark text on light accent
             case 'secondary':
-                return theme.text;
+                return '#22223B'; // dark text on accentLight
             case 'outline':
             case 'ghost':
-                return color || theme.accent;
+                return color || theme.accent || '#22223B';
+            default:
+                return '#22223B';
         }
     };
 
@@ -91,21 +97,21 @@ export const MotivoButton: React.FC<MotivoButtonProps> = ({
         switch (size) {
             case 'small':
                 return {
-                    paddingVertical: spacing.sm,
+                    paddingVertical: spacing.xs + 2,
                     paddingHorizontal: spacing.md,
                     borderRadius: roundness.md,
                 };
             case 'medium':
                 return {
-                    paddingVertical: spacing.md,
-                    paddingHorizontal: spacing.lg,
+                    paddingVertical: spacing.sm + 2,
+                    paddingHorizontal: spacing.md + 4,
                     borderRadius: roundness.md,
                 };
             case 'large':
                 return {
-                    paddingVertical: spacing.lg - 4,
-                    paddingHorizontal: spacing.xl,
-                    borderRadius: roundness.lg,
+                    paddingVertical: spacing.md - 2,
+                    paddingHorizontal: spacing.lg,
+                    borderRadius: roundness.md,
                 };
         }
     };
@@ -113,59 +119,89 @@ export const MotivoButton: React.FC<MotivoButtonProps> = ({
     const getTextSize = (): TextStyle => {
         switch (size) {
             case 'small':
-                return { fontSize: 14 };
+                return { fontSize: 13 };
             case 'medium':
-                return { fontSize: 16 };
+                return { fontSize: 15 };
             case 'large':
-                return { fontSize: 18 };
+                return { fontSize: 16 };
         }
     };
 
-    // 2025 design - better visual feedback with ripple and transitions
+    // Handle press animation
+    const onPressIn = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 0.97,
+            speed: 40,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    const onPressOut = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 1,
+            speed: 30,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    // Modern animated button with subtle scaling effect
     return (
-        <Pressable
-            onPress={onPress}
-            style={({ pressed }) => [
-                styles.button,
-                getButtonStyle(),
-                getSizeStyle(),
+        <Animated.View
+            style={[
                 fullWidth && styles.fullWidth,
-                { opacity: (pressed || disabled) ? 0.8 : 1 },
-                disabled && styles.disabled,
-                style,
+                { transform: [{ scale: scaleAnim }] },
             ]}
-            disabled={disabled || loading}
-            android_ripple={{
-                color: variant === 'primary' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)',
-                borderless: false,
-                foreground: true
-            }}
         >
-            <View style={styles.contentContainer}>
-                {loading ? (
-                    <ActivityIndicator
-                        size="small"
-                        color={getTextColor() as string}
-                        style={styles.loader}
-                    />
-                ) : (
-                    <>
-                        {icon && <View style={styles.iconContainer}>{icon}</View>}
-                        <Text
-                            style={[
-                                styles.text,
-                                typography.button,
-                                getTextSize(),
-                                { color: getTextColor() },
-                                textStyle,
-                            ]}
-                        >
-                            {title}
-                        </Text>
-                    </>
-                )}
-            </View>
-        </Pressable>
+            <Pressable
+                onPress={onPress}
+                onPressIn={onPressIn}
+                onPressOut={onPressOut}
+                style={({ pressed }) => [
+                    styles.button,
+                    getButtonStyle(),
+                    getSizeStyle(),
+                    { opacity: (pressed || disabled) ? 0.9 : 1 },
+                    disabled && styles.disabled,
+                    style,
+                ]}
+                disabled={disabled || loading}
+                android_ripple={{
+                    color: variant === 'primary' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)',
+                    borderless: false,
+                    foreground: true
+                }}
+            >
+                <View style={styles.contentContainer}>
+                    {loading ? (
+                        <ActivityIndicator
+                            size="small"
+                            color={getTextColor() as string}
+                            style={styles.loader}
+                        />
+                    ) : (
+                        <>
+                            {icon && iconPosition === 'left' && (
+                                <View style={styles.iconContainer}>{icon}</View>
+                            )}
+                            <Text
+                                style={[
+                                    styles.text,
+                                    getTextSize(),
+                                    typography.button,
+                                    { color: getTextColor() },
+                                    textStyle,
+                                ]}
+                            >
+                                {title}
+                            </Text>
+                            {icon && iconPosition === 'right' && (
+                                <View style={[styles.iconContainer, styles.iconRight]}>{icon}</View>
+                            )}
+                        </>
+                    )}
+                </View>
+            </Pressable>
+        </Animated.View>
     );
 };
 
@@ -188,10 +224,15 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     text: {
+        ...typography.button,
         textAlign: 'center',
     },
     iconContainer: {
         marginRight: spacing.sm,
+    },
+    iconRight: {
+        marginRight: 0,
+        marginLeft: spacing.sm,
     },
     loader: {
         marginHorizontal: spacing.xs,
