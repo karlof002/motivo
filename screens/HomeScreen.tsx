@@ -1,27 +1,65 @@
 // screens/HomeScreen.tsx
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    TouchableOpacity,
+    Image,
+    useColorScheme
+} from 'react-native';
 import { MotivoButton } from '../components/MotivoButton';
 import { loadQuotes, getRandomQuote } from '../storage/quoteStorage';
 import { Quote } from '../types';
-import { useColorScheme } from 'react-native';
+import { getTheme, spacing, roundness, typography, elevation } from '../theme/theme';
 
 const HomeScreen: React.FC = () => {
     const [quotes, setQuotes] = useState<Quote[]>([]);
     const [currentQuote, setCurrentQuote] = useState<Quote | null>(null);
     const [loading, setLoading] = useState(true);
-    const scheme = useColorScheme();
-    const isDark = scheme === 'dark';
+    const [fadeAnim] = useState(new Animated.Value(0));
+    const colorScheme = useColorScheme();
+    const theme = getTheme(colorScheme);
 
     useEffect(() => {
-        (async () => {
-            const loadedQuotes = await loadQuotes();
-            setQuotes(loadedQuotes);
-            setCurrentQuote(getRandomQuote(loadedQuotes));
-            setLoading(false);
-        })();
+        loadQuotesData();
     }, []);
+
+    useEffect(() => {
+        // Modern 2025 animation - smooth transitions between quotes
+        if (currentQuote) {
+            Animated.sequence([
+                Animated.timing(fadeAnim, {
+                    toValue: 0,
+                    duration: 0,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 600,
+                    useNativeDriver: true,
+                })
+            ]).start();
+        }
+    }, [currentQuote]);
+
+    const loadQuotesData = async () => {
+        const loadedQuotes = await loadQuotes();
+        setQuotes(loadedQuotes);
+        setCurrentQuote(getRandomQuote(loadedQuotes));
+        setLoading(false);
+
+        // Fade in animation when loaded
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+        }).start();
+    };
 
     const handleNewQuote = () => {
         if (quotes.length === 0) return;
@@ -29,7 +67,15 @@ const HomeScreen: React.FC = () => {
         do {
             nextQuote = getRandomQuote(quotes);
         } while (nextQuote.id === currentQuote?.id && quotes.length > 1);
-        setCurrentQuote(nextQuote);
+
+        // Fade out/in animation for quote change
+        Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 250,
+            useNativeDriver: true,
+        }).start(() => {
+            setCurrentQuote(nextQuote);
+        });
     };
 
     const handleSaveQuote = () => {
@@ -39,26 +85,64 @@ const HomeScreen: React.FC = () => {
 
     if (loading || !currentQuote) {
         return (
-            <View style={[styles.container, isDark && styles.darkBg]}>
-                <ActivityIndicator size="large" color="#ccc" />
+            <View style={[styles.container, { backgroundColor: theme.background }]}>
+                <ActivityIndicator size="large" color={theme.accent} />
             </View>
         );
     }
 
     return (
-        <View style={[styles.container, isDark && styles.darkBg]}>
-            <View style={[styles.quoteCard, isDark && styles.darkCard]}>
-                <Text style={[styles.quoteText, isDark && styles.darkText]}>
-                    "{currentQuote.text}"
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            {/* Top decoration */}
+            <View style={[styles.decorationTop, { backgroundColor: theme.accentLight }]} />
+
+            <Animated.View
+                style={[
+                    styles.quoteCard,
+                    {
+                        backgroundColor: theme.card,
+                        shadowColor: theme.shadow,
+                        transform: [{
+                            scale: fadeAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0.95, 1]
+                            })
+                        }],
+                        opacity: fadeAnim
+                    },
+                    elevation.medium
+                ]}
+            >
+                <View style={styles.quoteMarkContainer}>
+                    <Text style={[styles.quoteMark, { color: theme.accent }]}>❝</Text>
+                </View>
+                <Text style={[styles.quoteText, { color: theme.text }]}>
+                    {currentQuote.text}
                 </Text>
                 {currentQuote.author && (
-                    <Text style={[styles.author, isDark && styles.darkText]}>
+                    <Text style={[styles.author, { color: theme.textSecondary }]}>
                         — {currentQuote.author}
                     </Text>
                 )}
+            </Animated.View>
+
+            <View style={styles.buttonContainer}>
+                <MotivoButton
+                    title="New Quote"
+                    onPress={handleNewQuote}
+                    variant="primary"
+                    style={styles.primaryButton}
+                />
+                <MotivoButton
+                    title="Save Quote"
+                    onPress={handleSaveQuote}
+                    variant="outline"
+                    style={styles.secondaryButton}
+                />
             </View>
-            <MotivoButton title="New Quote" onPress={handleNewQuote} />
-            <MotivoButton title="Save Quote" onPress={handleSaveQuote} />
+
+            {/* Bottom decoration */}
+            <View style={[styles.decorationBottom, { backgroundColor: theme.accentLight }]} />
         </View>
     );
 };
@@ -68,47 +152,75 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#F7EFE5',
-        padding: 24,
+        padding: spacing.lg,
+        position: 'relative',
+        overflow: 'hidden',
     },
-    darkBg: {
-        backgroundColor: '#22223B',
+    decorationTop: {
+        position: 'absolute',
+        top: -100,
+        right: -100,
+        width: 250,
+        height: 250,
+        borderRadius: 125,
+        opacity: 0.5,
+    },
+    decorationBottom: {
+        position: 'absolute',
+        bottom: -80,
+        left: -80,
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        opacity: 0.5,
     },
     quoteCard: {
-        backgroundColor: '#FFFDF6',
-        borderRadius: 24,
-        padding: 28,
-        shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 10,
+        borderRadius: roundness.lg,
+        padding: spacing.xl,
         alignItems: 'center',
-        marginBottom: 32,
-        minWidth: 280,
-        maxWidth: 380,
+        marginBottom: spacing.xl,
+        minWidth: 300,
+        maxWidth: 400,
+        width: '100%',
+        position: 'relative',
+        paddingTop: spacing.xl + 10,
     },
-    darkCard: {
-        backgroundColor: '#363654',
+    quoteMarkContainer: {
+        position: 'absolute',
+        top: -15,
+        left: 20,
+    },
+    quoteMark: {
+        fontSize: 60,
+        opacity: 0.7,
     },
     quoteText: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#22223B',
+        ...typography.subtitle,
         textAlign: 'center',
-        marginBottom: 14,
-        fontFamily: 'Inter', // If you load custom fonts
-    },
-    darkText: {
-        color: '#F7EFE5',
+        marginBottom: spacing.md,
+        lineHeight: 26,
     },
     author: {
-        fontSize: 16,
-        fontWeight: '400',
-        color: '#555',
+        ...typography.bodySmall,
         textAlign: 'right',
-        marginTop: 4,
+        alignSelf: 'flex-end',
+        marginTop: spacing.sm,
         fontStyle: 'italic',
     },
-});
+    buttonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        width: '100%',
+        paddingHorizontal: spacing.md,
+    },
+    primaryButton: {
+        flex: 1,
+        marginRight: spacing.sm,
+    },
+    secondaryButton: {
+        flex: 1,
+        marginLeft: spacing.sm,
+    },
+})
 
 export default HomeScreen;

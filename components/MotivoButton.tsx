@@ -1,6 +1,19 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet, ViewStyle, TextStyle, ColorValue } from 'react-native';
+import {
+    Pressable,
+    Text,
+    StyleSheet,
+    ViewStyle,
+    TextStyle,
+    ColorValue,
+    View,
+    ActivityIndicator
+} from 'react-native';
 import { useColorScheme } from 'react-native';
+import { getTheme, spacing, roundness, typography, elevation } from '../theme/theme';
+
+type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost';
+type ButtonSize = 'small' | 'medium' | 'large';
 
 type MotivoButtonProps = {
     title: string;
@@ -9,12 +22,12 @@ type MotivoButtonProps = {
     textStyle?: TextStyle;
     color?: ColorValue; // Override button color
     disabled?: boolean;
+    variant?: ButtonVariant;
+    size?: ButtonSize;
+    loading?: boolean;
+    icon?: React.ReactNode;
+    fullWidth?: boolean;
 };
-
-const LIGHT_BG = '#F7EFE5';
-const DARK_BG = '#22223B';
-const LIGHT_TEXT = '#22223B';
-const DARK_TEXT = '#F7EFE5';
 
 export const MotivoButton: React.FC<MotivoButtonProps> = ({
     title,
@@ -23,50 +36,164 @@ export const MotivoButton: React.FC<MotivoButtonProps> = ({
     textStyle,
     color,
     disabled = false,
+    variant = 'primary',
+    size = 'medium',
+    loading = false,
+    icon,
+    fullWidth = false,
 }) => {
     const scheme = useColorScheme();
-    const isDark = scheme === 'dark';
+    const theme = getTheme(scheme);
 
+    // Modern style handling based on variants
+    const getButtonStyle = (): ViewStyle => {
+        switch (variant) {
+            case 'primary':
+                return {
+                    backgroundColor: color || theme.accent,
+                    borderWidth: 0,
+                };
+            case 'secondary':
+                return {
+                    backgroundColor: theme.accentLight,
+                    borderWidth: 0,
+                };
+            case 'outline':
+                return {
+                    backgroundColor: 'transparent',
+                    borderWidth: 1.5,
+                    borderColor: color || theme.accent,
+                };
+            case 'ghost':
+                return {
+                    backgroundColor: 'transparent',
+                    borderWidth: 0,
+                    ...elevation.small,
+                    shadowOpacity: 0,
+                    elevation: 0,
+                };
+        }
+    };
+
+    const getTextColor = (): ColorValue => {
+        switch (variant) {
+            case 'primary':
+                return theme.background;
+            case 'secondary':
+                return theme.text;
+            case 'outline':
+            case 'ghost':
+                return color || theme.accent;
+        }
+    };
+
+    const getSizeStyle = (): ViewStyle => {
+        switch (size) {
+            case 'small':
+                return {
+                    paddingVertical: spacing.sm,
+                    paddingHorizontal: spacing.md,
+                    borderRadius: roundness.md,
+                };
+            case 'medium':
+                return {
+                    paddingVertical: spacing.md,
+                    paddingHorizontal: spacing.lg,
+                    borderRadius: roundness.md,
+                };
+            case 'large':
+                return {
+                    paddingVertical: spacing.lg - 4,
+                    paddingHorizontal: spacing.xl,
+                    borderRadius: roundness.lg,
+                };
+        }
+    };
+
+    const getTextSize = (): TextStyle => {
+        switch (size) {
+            case 'small':
+                return { fontSize: 14 };
+            case 'medium':
+                return { fontSize: 16 };
+            case 'large':
+                return { fontSize: 18 };
+        }
+    };
+
+    // 2025 design - better visual feedback with ripple and transitions
     return (
         <Pressable
             onPress={onPress}
-            style={[
+            style={({ pressed }) => [
                 styles.button,
-                { backgroundColor: color || (isDark ? DARK_BG : LIGHT_BG), opacity: disabled ? 0.5 : 1 },
+                getButtonStyle(),
+                getSizeStyle(),
+                fullWidth && styles.fullWidth,
+                { opacity: (pressed || disabled) ? 0.8 : 1 },
+                disabled && styles.disabled,
                 style,
             ]}
-            disabled={disabled}
-            android_ripple={{ color: '#cccccc' }}
+            disabled={disabled || loading}
+            android_ripple={{
+                color: variant === 'primary' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)',
+                borderless: false,
+                foreground: true
+            }}
         >
-            <Text
-                style={[
-                    styles.text,
-                    { color: isDark ? DARK_TEXT : LIGHT_TEXT },
-                    textStyle,
-                ]}
-            >
-                {title}
-            </Text>
+            <View style={styles.contentContainer}>
+                {loading ? (
+                    <ActivityIndicator
+                        size="small"
+                        color={getTextColor() as string}
+                        style={styles.loader}
+                    />
+                ) : (
+                    <>
+                        {icon && <View style={styles.iconContainer}>{icon}</View>}
+                        <Text
+                            style={[
+                                styles.text,
+                                typography.button,
+                                getTextSize(),
+                                { color: getTextColor() },
+                                textStyle,
+                            ]}
+                        >
+                            {title}
+                        </Text>
+                    </>
+                )}
+            </View>
         </Pressable>
     );
 };
 
 const styles = StyleSheet.create({
     button: {
-        borderRadius: 18,
-        paddingVertical: 14,
-        paddingHorizontal: 24,
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOpacity: 0.12,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 8,
         alignItems: 'center',
-        marginVertical: 8,
+        justifyContent: 'center',
+        marginVertical: spacing.sm,
+        ...elevation.small,
+    },
+    fullWidth: {
+        width: '100%',
+    },
+    disabled: {
+        opacity: 0.5,
+    },
+    contentContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     text: {
-        fontSize: 16,
-        fontWeight: '600',
-        letterSpacing: 0.3,
+        textAlign: 'center',
+    },
+    iconContainer: {
+        marginRight: spacing.sm,
+    },
+    loader: {
+        marginHorizontal: spacing.xs,
     },
 });
